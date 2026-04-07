@@ -100,7 +100,7 @@
 </head>
 <body>
 
-<div id="loader" class="loading">讀取中...</div>
+<div id="loader" class="loading" style="display: none;">讀取中...</div>
 
 <div class="sidebar">
     <h2>數據來源</h2>
@@ -161,16 +161,13 @@
             }
         });
 
-        try {
-            const response = await fetch(CSV_PATH);
-            if (!response.ok) throw new Error('無法自動讀取 ' + CSV_PATH);
-            const csvText = await response.text();
-            parseAndProcess(csvText);
-        } catch (error) {
-            console.warn(error.message);
-            showError('無法自動讀取數據。請手動上傳檔案，或使用 Web Server 伺服此頁面。');
-            document.getElementById('loader').style.display = 'none';
-        }
+        // Set default start date to Jan 1st of current year
+        const currentYear = new Date().getFullYear();
+        const defaultStartDate = `${currentYear}-01-01`;
+        document.getElementById('start-date').value = defaultStartDate;
+        
+        // Show instruction message on startup
+        showError('請點擊左側「選擇檔案」讀取 Omron 匯出的 CSV 數據。', 'info');
     }
 
     function handleFileSelect(evt) {
@@ -199,11 +196,6 @@
                     document.getElementById('controls').innerHTML = '';
                 }
                 
-                // Set default start date to Jan 1st of current year
-                const currentYear = new Date().getFullYear();
-                const defaultStartDate = `${currentYear}-01-01`;
-                document.getElementById('start-date').value = defaultStartDate;
-
                 processData(rawData, allFields);
                 document.getElementById('loader').style.display = 'none';
                 document.getElementById('error-msg').style.display = 'none';
@@ -219,10 +211,19 @@
         processData(rawData, allFields);
     }
 
-    function showError(msg) {
+    function showError(msg, type = 'error') {
         const errorEl = document.getElementById('error-msg');
         errorEl.innerHTML = msg;
         errorEl.style.display = 'block';
+        if (type === 'info') {
+            errorEl.style.color = '#3498db';
+            errorEl.style.borderColor = '#3498db';
+            errorEl.style.background = '#ebf5fb';
+        } else {
+            errorEl.style.color = '#e74c3c';
+            errorEl.style.borderColor = '#e74c3c';
+            errorEl.style.background = '#fdf2f2';
+        }
     }
 
     function processData(data, fields) {
