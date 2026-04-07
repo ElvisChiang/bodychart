@@ -18,6 +18,7 @@
             display: flex;
             height: 100vh;
             background-color: var(--bg-color);
+            overflow: hidden;
         }
         .sidebar {
             width: var(--sidebar-width);
@@ -26,27 +27,75 @@
             padding: 20px;
             overflow-y: auto;
             box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+            transition: transform 0.3s ease;
+            z-index: 100;
         }
         .main-content {
             flex-grow: 1;
-            padding: 20px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            position: relative;
+        }
+        .menu-toggle {
+            display: none;
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 101;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                transform: translateX(-100%);
+                width: 80%;
+                max-width: 300px;
+            }
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            .menu-toggle {
+                display: block;
+            }
+            .main-content {
+                padding-top: 60px;
+            }
+            .overlay {
+                display: none;
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 99;
+            }
+            .overlay.active {
+                display: block;
+            }
         }
         .chart-container {
             flex-grow: 1;
             position: relative;
             background: white;
             border-radius: 8px;
-            padding: 15px;
+            padding: 10px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            min-height: 300px;
         }
-        h2 { margin-top: 0; font-size: 1.2rem; color: #333; }
+        h2 { margin-top: 0; font-size: 1.1rem; color: #333; }
         .controls {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
         }
         .checkbox-item {
             display: flex;
@@ -54,15 +103,12 @@
             gap: 8px;
             font-size: 0.9rem;
             cursor: pointer;
-            padding: 5px;
+            padding: 6px;
             border-radius: 4px;
             transition: background 0.2s;
         }
         .checkbox-item:hover {
             background-color: #f1f1f1;
-        }
-        .checkbox-item input {
-            cursor: pointer;
         }
         .loading {
             position: fixed;
@@ -76,19 +122,21 @@
         }
         .error {
             color: #e74c3c;
-            padding: 10px;
+            padding: 12px;
             border: 1px solid #e74c3c;
             border-radius: 4px;
             background: #fdf2f2;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
         }
         .btn-group {
             margin-bottom: 15px;
             display: flex;
             gap: 5px;
+            flex-wrap: wrap;
         }
         button {
-            padding: 5px 10px;
+            padding: 6px 10px;
             font-size: 0.8rem;
             cursor: pointer;
             border: 1px solid #ccc;
@@ -96,17 +144,21 @@
             border-radius: 4px;
         }
         button:hover { background: #f0f0f0; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 15px 0; }
     </style>
 </head>
 <body>
 
 <div id="loader" class="loading" style="display: none;">讀取中...</div>
+<div id="overlay" class="overlay" onclick="toggleMenu()"></div>
 
-<div class="sidebar">
+<button class="menu-toggle" onclick="toggleMenu()">選單</button>
+
+<div id="sidebar" class="sidebar">
     <h2>數據來源</h2>
     <div id="file-input-container" style="margin-bottom: 20px;">
         <input type="file" id="csv-file" accept=".csv" style="width: 100%; font-size: 0.8rem;">
-        <p style="font-size: 0.7rem; color: #666; margin-top: 5px;">若自動讀取失敗，請手動選擇 CSV 檔案</p>
+        <p style="font-size: 0.7rem; color: #666; margin-top: 5px;">選擇 Omron 匯出的 CSV</p>
     </div>
     
     <hr>
@@ -114,7 +166,7 @@
     <h2>日期篩選</h2>
     <div style="margin-bottom: 20px;">
         <label for="start-date" style="font-size: 0.9rem; display: block; margin-bottom: 5px;">起始日期：</label>
-        <input type="date" id="start-date" style="width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 4px;">
+        <input type="date" id="start-date" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem;">
     </div>
 
     <hr>
@@ -130,7 +182,7 @@
 </div>
 
 <div class="main-content">
-    <h1 style="margin: 0 0 15px 0; font-size: 1.5rem; color: #2c3e50;">Omron 匯出資料專用小工具</h1>
+    <h1 style="margin: 0 0 10px 0; font-size: 1.2rem; color: #2c3e50; text-align: center;">Omron 匯出資料專用小工具</h1>
     <div id="error-msg" style="display: none;" class="error"></div>
     <div class="chart-container">
         <canvas id="bodyChart"></canvas>
@@ -141,6 +193,12 @@
     let myChart;
     let rawData = [];
     let allFields = [];
+
+    function toggleMenu() {
+        document.getElementById('sidebar').classList.toggle('active');
+        document.getElementById('overlay').classList.toggle('active');
+    }
+
     const colors = [
         '#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6',
         '#e67e22', '#1abc9c', '#34495e', '#d35400', '#27ae60',
@@ -174,10 +232,23 @@
         const file = evt.target.files[0];
         if (!file) return;
         
+        // Hide menu on mobile after selection
+        if (window.innerWidth <= 768) {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar.classList.contains('active')) {
+                toggleMenu();
+            }
+        }
+        
         document.getElementById('loader').style.display = 'flex';
         const reader = new FileReader();
         reader.onload = function(e) {
-            parseAndProcess(e.target.result);
+            let content = e.target.result;
+            // Remove BOM if present
+            if (content.charCodeAt(0) === 0xFEFF) {
+                content = content.substring(1);
+            }
+            parseAndProcess(content);
         };
         reader.readAsText(file);
     }
@@ -187,7 +258,17 @@
             header: true,
             dynamicTyping: true,
             skipEmptyLines: true,
+            transformHeader: function(h) {
+                // Remove potential hidden characters and quotes
+                return h.trim().replace(/^"|"$/g, '').replace(/[\uFEFF-\uFFFF]/g, "");
+            },
             complete: function(results) {
+                if (!results.data || results.data.length === 0) {
+                    showError('檔案解析後無數據，請確認 CSV 格式是否正確。');
+                    document.getElementById('loader').style.display = 'none';
+                    return;
+                }
+
                 rawData = results.data;
                 allFields = results.meta.fields;
                 
