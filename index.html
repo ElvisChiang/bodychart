@@ -110,6 +110,14 @@
     </div>
     
     <hr>
+
+    <h2>日期篩選</h2>
+    <div style="margin-bottom: 20px;">
+        <label for="start-date" style="font-size: 0.9rem; display: block; margin-bottom: 5px;">起始日期：</label>
+        <input type="date" id="start-date" style="width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 4px;">
+    </div>
+
+    <hr>
     
     <h2>數據欄位</h2>
     <div class="btn-group">
@@ -130,6 +138,8 @@
 
 <script>
     let myChart;
+    let rawData = [];
+    let allFields = [];
     const colors = [
         '#3498db', '#e74c3c', '#2ecc71', '#f1c40f', '#9b59b6',
         '#e67e22', '#1abc9c', '#34495e', '#d35400', '#27ae60',
@@ -142,6 +152,13 @@
     async function init() {
         // Setup file input listener
         document.getElementById('csv-file').addEventListener('change', handleFileSelect);
+        
+        // Setup date filter listener
+        document.getElementById('start-date').addEventListener('change', () => {
+            if (rawData.length > 0) {
+                updateChartWithFilter();
+            }
+        });
 
         try {
             const response = await fetch(CSV_PATH);
@@ -173,11 +190,21 @@
             dynamicTyping: true,
             skipEmptyLines: true,
             complete: function(results) {
+                rawData = results.data;
+                allFields = results.meta.fields;
+                
                 if (myChart) {
                     myChart.destroy();
                     document.getElementById('controls').innerHTML = '';
                 }
-                processData(results.data, results.meta.fields);
+                
+                // Set default start date to the earliest date in data
+                if (rawData.length > 0) {
+                    const firstDate = rawData[0]['測量日期'].split(' ')[0].replace(/\//g, '-');
+                    document.getElementById('start-date').value = firstDate;
+                }
+
+                processData(rawData, allFields);
                 document.getElementById('loader').style.display = 'none';
                 document.getElementById('error-msg').style.display = 'none';
             },
@@ -188,6 +215,10 @@
         });
     }
 
+    function updateChartWithFilter() {
+        processData(rawData, allFields);
+    }
+
     function showError(msg) {
         const errorEl = document.getElementById('error-msg');
         errorEl.innerHTML = msg;
@@ -195,27 +226,53 @@
     }
 
     function processData(data, fields) {
+        const startDate = document.getElementById('start-date').value;
+        
+        // Filter data based on start date
+        const filteredData = data.filter(row => {
+            if (!startDate) return true;
+            const rowDate = row['測量日期'].split(' ')[0].replace(/\//g, '-');
+            return rowDate >= startDate;
+        });
+
         // Prepare labels (Dates)
-        const labels = data.map(row => row['測量日期']);
+        const labels = filteredData.map(row => row['測量日期']);
         
         // Identify numerical fields (ignore Date, Timezone, Model)
         const ignoreFields = ['測量日期', '時區', '型號'];
         const dataFields = fields.filter(f => !ignoreFields.includes(f));
 
+        // Keep track of current visibility if chart exists
+        const visibilityMap = {};
+        if (myChart) {
+            myChart.data.datasets.forEach(ds => {
+                visibilityMap[ds.label] = myChart.isDatasetVisible(myChart.data.datasets.indexOf(ds));
+            });
+            myChart.destroy();
+        }
+
         const datasets = dataFields.map((field, index) => {
+            const isVisible = visibilityMap.hasOwnProperty(field) 
+                ? visibilityMap[field] 
+                : (field === '體重(kg)' || field === '體脂肪(%)');
+
             return {
                 label: field,
-                data: data.map(row => row[field]),
+                data: filteredData.map(row => row[field]),
                 borderColor: colors[index % colors.length],
-                backgroundColor: colors[index % colors.length] + '33', // 20% opacity
+                backgroundColor: colors[index % colors.length] + '33',
                 borderWidth: 2,
                 tension: 0.1,
-                hidden: field !== '體重(kg)' && field !== '體脂肪(%)' // Default show only these
+                hidden: !isVisible
             };
         });
 
         renderChart(labels, datasets);
-        createCheckboxes(dataFields);
+        
+        // Only create checkboxes if they don't exist
+        if (document.getElementById('controls').innerHTML === '') {
+            createCheckboxes(dataFields);
+        }
     }
 
     function renderChart(labels, datasets) {
