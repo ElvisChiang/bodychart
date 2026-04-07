@@ -269,10 +269,8 @@
 
         renderChart(labels, datasets);
         
-        // Only create checkboxes if they don't exist
-        if (document.getElementById('controls').innerHTML === '') {
-            createCheckboxes(dataFields);
-        }
+        // Always recreate checkboxes to ensure they match current data/fields
+        createCheckboxes(dataFields, visibilityMap);
     }
 
     function renderChart(labels, datasets) {
@@ -309,15 +307,22 @@
         });
     }
 
-    function createCheckboxes(fields) {
+    function createCheckboxes(fields, visibilityMap) {
         const container = document.getElementById('controls');
+        container.innerHTML = ''; // Clear existing
         fields.forEach((field, index) => {
             const div = document.createElement('label');
             div.className = 'checkbox-item';
             
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
-            checkbox.checked = (field === '體重(kg)' || field === '體脂肪(%)');
+            
+            // Determine checked state based on visibilityMap or defaults
+            const isVisible = visibilityMap.hasOwnProperty(field) 
+                ? visibilityMap[field] 
+                : (field === '體重(kg)' || field === '體脂肪(%)');
+                
+            checkbox.checked = isVisible;
             checkbox.dataset.index = index;
             
             checkbox.addEventListener('change', (e) => {
